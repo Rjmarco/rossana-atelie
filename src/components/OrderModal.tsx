@@ -236,7 +236,10 @@ export default function OrderModal({ isOpen, onClose, onSuccess, editingOrder }:
       };
 
       if (editingOrder) {
-        await updateDoc(doc(db, `laboratories/${labId}/orders`, editingOrder.id), orderData);
+        await updateDoc(doc(db, `laboratories/${labId}/orders`, editingOrder.id), {
+          ...orderData,
+          updatedAt: serverTimestamp()
+        });
       } else {
         await addDoc(collection(db, `laboratories/${labId}/orders`), orderData);
       }
