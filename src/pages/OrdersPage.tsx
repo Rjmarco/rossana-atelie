@@ -97,7 +97,8 @@ export default function OrdersPage() {
     if (!labId) return;
     try {
       await updateDoc(doc(db, `laboratories/${labId}/orders`, order.id), {
-        status: 'finished'
+        status: 'finished',
+        updatedAt: serverTimestamp()
       });
 
       // Automatic financial posting
