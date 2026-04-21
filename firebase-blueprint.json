@@ -1,0 +1,73 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role and lab affiliation",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "labId": { "type": ["string", "null"] },
+        "role": { "type": ["string", "null"], "enum": ["owner", "technician", "secretary", "assistant"] },
+        "status": { "type": "string", "enum": ["approved", "pending", "none", "looking"] },
+        "displayName": { "type": "string" },
+        "accessCode": { "type": "string" }
+      },
+      "required": ["uid", "email", "status"]
+    },
+    "Laboratory": {
+      "title": "Laboratory",
+      "description": "Main organization entity",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "inviteCode": { "type": "string" }
+      },
+      "required": ["name", "ownerId"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Laboratory production order",
+      "type": "object",
+      "properties": {
+        "patientName": { "type": "string" },
+        "dentistId": { "type": "string" },
+        "clinicId": { "type": ["string", "null"] },
+        "serviceId": { "type": "string" },
+        "status": { "type": "string" },
+        "total": { "type": "number" },
+        "dueDate": { "type": "string" }
+      },
+      "required": ["patientName", "dentistId", "serviceId"]
+    },
+    "Dentist": {
+      "title": "Dentist",
+      "description": "Client professional",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "clinicId": { "type": ["string", "null"] }
+      },
+      "required": ["name"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/laboratories/{labId}": {
+      "schema": "Laboratory",
+      "description": "Laboratory main record"
+    },
+    "/laboratories/{labId}/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Orders collection"
+    },
+    "/laboratories/{labId}/dentists/{dentistId}": {
+      "schema": "Dentist",
+      "description": "Dentists collection"
+    }
+  }
+}

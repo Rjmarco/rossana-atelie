@@ -1,0 +1,127 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isLabMember(labId) {
+      return isSignedIn() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.labId == labId &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved';
+    }
+
+    function isAdminOfLab(labId) {
+       return isSignedIn() && 
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.labId == labId &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'owner';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Collections ---
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && request.auth.uid == userId;
+      allow list: if isSignedIn() && (
+        resource.data.status == 'looking' || 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'owner'
+      );
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId ||
+        (resource.data.labId != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.labId == resource.data.labId) ||
+        resource.data.status == 'looking'
+      );
+      
+      allow create: if isSignedIn() && request.auth.uid == userId && (
+        incoming().status in ['pending', 'approved', 'none', 'looking'] &&
+        (incoming().role == null || incoming().role in ['owner', 'technician', 'secretary', 'assistant'] || !incoming().keys().contains('role'))
+      );
+
+      allow update: if isSignedIn() && (
+        (request.auth.uid == userId && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['active', 'lastActive', 'status', 'labId', 'displayName', 'role', 'uid', 'email', 'createdAt', 'linkedAt', 'accessCode', 'updatedAt']) &&
+         (existing().status in ['none', 'looking', 'pending'] || !incoming().diff(existing()).affectedKeys().hasAny(['role']))) ||
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'owner' && 
+         (
+           (existing().labId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.labId &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['role', 'status', 'active'])) ||
+           (existing().status == 'looking' && 
+            incoming().labId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.labId &&
+            incoming().status == 'approved' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['labId', 'status', 'role', 'linkedAt']))
+         )
+        )
+      );
+      
+      allow delete: if isSignedIn() && (request.auth.uid == userId || isAdminOfLab(existing().labId));
+    }
+
+    match /laboratories/{labId} {
+      allow read, list: if isSignedIn(); // Allow listing for join requests
+      allow create: if isSignedIn() && incoming().ownerId == request.auth.uid;
+      allow update: if isAdminOfLab(labId);
+
+      // --- Subcollections ---
+
+      match /orders/{orderId} {
+        allow read, list: if isLabMember(labId);
+        allow create: if isLabMember(labId) && (
+          incoming().keys().hasAll(['patientName', 'labId', 'status', 'createdAt']) &&
+          incoming().patientName is string && incoming().patientName.size() <= 100
+        );
+        allow update: if isLabMember(labId) && (
+          incoming().labId == existing().labId &&
+          incoming().updatedAt == request.time
+        );
+        allow delete: if isAdminOfLab(labId);
+      }
+
+      match /dentists/{dentistId} {
+        allow read, list: if isLabMember(labId);
+        allow create: if isLabMember(labId);
+        allow update: if isLabMember(labId) && incoming().labId == existing().labId;
+        allow delete: if isAdminOfLab(labId);
+      }
+
+      match /clinics/{clinicId} {
+        allow read, list: if isLabMember(labId);
+        allow create: if isLabMember(labId);
+        allow update: if isLabMember(labId) && incoming().labId == existing().labId;
+        allow delete: if isAdminOfLab(labId);
+      }
+
+      match /services/{serviceId} {
+        allow read, list: if isLabMember(labId);
+        allow create: if isLabMember(labId);
+        allow update: if isLabMember(labId) && incoming().labId == existing().labId;
+        allow delete: if isAdminOfLab(labId);
+      }
+
+      match /transactions/{transactionId} {
+        allow read, list: if isLabMember(labId);
+        allow create: if isLabMember(labId) && (
+          incoming().value is number && incoming().value >= 0
+        );
+        allow update: if isLabMember(labId) && incoming().labId == existing().labId;
+        allow delete: if isAdminOfLab(labId);
+      }
+    }
+  }
+}
