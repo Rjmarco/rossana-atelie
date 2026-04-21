@@ -30,21 +30,39 @@ import { collection, query, onSnapshot, orderBy, doc, deleteDoc, limit } from 'f
 import { db } from '../lib/firebase';
 import { AnimatePresence } from 'motion/react';
 
-const data = [
-  { name: 'Seg', ordens: 12, faturamento: 2400 },
-  { name: 'Ter', ordens: 18, faturamento: 3600 },
-  { name: 'Qua', ordens: 15, faturamento: 3000 },
-  { name: 'Qui', ordens: 22, faturamento: 4500 },
-  { name: 'Sex', ordens: 10, faturamento: 2000 },
-  { name: 'Sáb', ordens: 5, faturamento: 1000 },
-];
-
 export default function DashboardPage() {
   const { userData, labId, setActivePage } = useLaboratory();
   const [orders, setOrders] = useState<any[]>([]);
   const [upcomingOrders, setUpcomingOrders] = useState<any[]>([]);
   const [dentistsCount, setDentistsCount] = useState(0);
   const [dentists, setDentists] = useState<Record<string, string>>({});
+
+  const chartData = React.useMemo(() => {
+    const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    const last7Days = [...Array(7)].map((_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      return {
+        name: days[d.getDay()],
+        dateStr: d.toISOString().split('T')[0],
+        ordens: 0,
+        faturamento: 0
+      };
+    });
+
+    orders.forEach(order => {
+      if (order.createdAt?.seconds) {
+        const orderDate = new Date(order.createdAt.seconds * 1000).toISOString().split('T')[0];
+        const dayMatch = last7Days.find(d => d.dateStr === orderDate);
+        if (dayMatch) {
+          dayMatch.ordens += 1;
+          dayMatch.faturamento += order.total || 0;
+        }
+      }
+    });
+
+    return last7Days;
+  }, [orders]);
 
   useEffect(() => {
     if (!labId) {
@@ -175,7 +193,7 @@ export default function DashboardPage() {
           </div>
           <div className="h-[350px] w-full relative z-10">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data}>
+              <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#FAFAF9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#D4D4D4', fontWeight: 800 }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#D4D4D4', fontWeight: 800 }} />
